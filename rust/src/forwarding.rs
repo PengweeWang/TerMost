@@ -61,13 +61,17 @@ fn tunnels() -> &'static RwLock<HashMap<String, TunnelHandle>> {
 
 async fn create_ssh_client(config: &SshConnectConfig) -> Result<client::Handle<ForwardHandler>, String> {
     let ssh_config = Arc::new(Config {
-        inactivity_timeout: Some(std::time::Duration::from_secs(60)),
+        inactivity_timeout: None,
+        keepalive_interval: Some(std::time::Duration::from_secs(15)),
+        keepalive_max: 3,
         ..Config::default()
     });
 
     let addr = (config.host.as_str(), config.port);
-    let mut handle = client::connect(ssh_config, addr, ForwardHandler {})
+    let connect_future = client::connect(ssh_config, addr, ForwardHandler {});
+    let mut handle = tokio::time::timeout(std::time::Duration::from_secs(15), connect_future)
         .await
+        .map_err(|_| format!("连接 SSH 服务器 {}:{} 超时 (15秒)", config.host, config.port))?
         .map_err(|e| format!("Failed to connect to SSH server {}:{}: {}", config.host, config.port, e))?;
 
     let auth_ok = match config.auth_type.to_lowercase().as_str() {
@@ -201,9 +205,10 @@ pub async fn start_tunnel(
 
                                         if let Ok(ch) = ch_res {
                                             let mut ssh_stream = ch.into_stream();
-                                            let _ = tokio::io::copy_bidirectional(&mut tcp_stream, &mut ssh_stream).await;
-                                            b_up_c.fetch_add(1024, Ordering::Relaxed);
-                                            b_down_c.fetch_add(1024, Ordering::Relaxed);
+                                            if let Ok((up, down)) = tokio::io::copy_bidirectional(&mut tcp_stream, &mut ssh_stream).await {
+                                                b_up_c.fetch_add(up, Ordering::Relaxed);
+                                                b_down_c.fetch_add(down, Ordering::Relaxed);
+                                            }
                                         }
                                     });
                                 }
@@ -253,11 +258,20 @@ pub async fn start_tunnel(
                                                     loc_port,
                                                 ).await
                                             };
-                                            if let Ok(ch) = ch_res {
-                                                let mut ssh_stream = ch.into_stream();
-                                                let _ = tokio::io::copy_bidirectional(&mut client_stream, &mut ssh_stream).await;
-                                                b_up_c.fetch_add(2048, Ordering::Relaxed);
-                                                b_down_c.fetch_add(2048, Ordering::Relaxed);
+                                            match ch_res {
+                                                Ok(ch) => {
+                                                    // SOCKS5 握手成功应答 (0x00 Success)
+                                                    let _ = client_stream.write_all(&[0x05, 0x00, 0x00, 0x01, 127, 0, 0, 1, 0, 0]).await;
+                                                    let mut ssh_stream = ch.into_stream();
+                                                    if let Ok((up, down)) = tokio::io::copy_bidirectional(&mut client_stream, &mut ssh_stream).await {
+                                                        b_up_c.fetch_add(up, Ordering::Relaxed);
+                                                        b_down_c.fetch_add(down, Ordering::Relaxed);
+                                                    }
+                                                }
+                                                Err(_) => {
+                                                    // SOCKS5 握手失败应答 (0x05 Connection Refused)
+                                                    let _ = client_stream.write_all(&[0x05, 0x05, 0x00, 0x01, 0, 0, 0, 0, 0, 0]).await;
+                                                }
                                             }
                                         }
                                     });
@@ -386,9 +400,6 @@ async fn handle_socks5_handshake(mut stream: TcpStream) -> Result<(String, u16, 
     let mut port_bytes = [0u8; 2];
     stream.read_exact(&mut port_bytes).await.map_err(|e| e.to_string())?;
     let target_port = u16::from_be_bytes(port_bytes);
-
-    // Send SOCKS5 Success (0x00)
-    stream.write_all(&[0x05, 0x00, 0x00, 0x01, 127, 0, 0, 1, 0, 0]).await.map_err(|e| e.to_string())?;
 
     Ok((target_host, target_port, stream))
 }

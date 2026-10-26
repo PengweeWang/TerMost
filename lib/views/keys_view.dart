@@ -57,18 +57,15 @@ class KeysView extends StatelessWidget {
         return Scaffold(
           appBar: AppBar(
             title: const Text('密钥管理'),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.file_download_outlined),
-                tooltip: '导入私钥',
-                onPressed: () => _openImportDialog(context),
-              ),
-              IconButton(
-                icon: const Icon(Icons.add),
-                tooltip: '生成新密钥',
-                onPressed: () => _openGenerateDialog(context),
-              ),
-            ],
+            actions: keys.isEmpty
+                ? null
+                : [
+                    IconButton(
+                      icon: const Icon(Icons.file_download_outlined),
+                      tooltip: '导入私钥',
+                      onPressed: () => _openImportDialog(context),
+                    ),
+                  ],
           ),
           body: keys.isEmpty
               ? Center(
@@ -225,24 +222,14 @@ class KeysView extends StatelessWidget {
                     );
                   },
                 ),
-          floatingActionButton: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              FloatingActionButton.small(
-                heroTag: 'fab_import',
-                onPressed: () => _openImportDialog(context),
-                tooltip: '导入私钥',
-                child: const Icon(Icons.file_download_outlined),
-              ),
-              const SizedBox(height: 10),
-              FloatingActionButton.extended(
-                heroTag: 'fab_generate',
-                onPressed: () => _openGenerateDialog(context),
-                icon: const Icon(Icons.add),
-                label: const Text('生成密钥'),
-              ),
-            ],
-          ),
+          floatingActionButton: keys.isEmpty
+              ? null
+              : FloatingActionButton.extended(
+                  heroTag: 'fab_generate',
+                  onPressed: () => _openGenerateDialog(context),
+                  icon: const Icon(Icons.add),
+                  label: const Text('生成密钥'),
+                ),
         );
       },
     );

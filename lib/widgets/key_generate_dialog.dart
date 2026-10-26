@@ -137,6 +137,7 @@ class _KeyGenerateDialogState extends State<KeyGenerateDialog> {
                 // Algorithm
                 DropdownButtonFormField<String>(
                   value: _algorithm,
+                  isExpanded: true,
                   decoration: const InputDecoration(
                     labelText: '密钥算法类型 *',
                     prefixIcon: Icon(Icons.security),
@@ -145,19 +146,31 @@ class _KeyGenerateDialogState extends State<KeyGenerateDialog> {
                   items: const [
                     DropdownMenuItem(
                       value: 'ed25519',
-                      child: Text('Ed25519 (强烈推荐，现代高效安全)'),
+                      child: Text(
+                        'Ed25519 (推荐·轻量高效)',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                     DropdownMenuItem(
                       value: 'rsa2048',
-                      child: Text('RSA 2048 位 (广泛兼容)'),
+                      child: Text(
+                        'RSA 2048 (传统兼顾)',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                     DropdownMenuItem(
                       value: 'rsa4096',
-                      child: Text('RSA 4096 位 (超高安全性)'),
+                      child: Text(
+                        'RSA 4096 (高安全性)',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                     DropdownMenuItem(
                       value: 'ecdsa',
-                      child: Text('ECDSA NIST P-256 (椭圆曲线)'),
+                      child: Text(
+                        'ECDSA P-256 (椭圆曲线)',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                   onChanged: (val) {

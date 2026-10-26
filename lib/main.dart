@@ -12,11 +12,19 @@ import 'views/tunnels_view.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize RustLib
-  await RustLib.init();
+  // Initialize RustLib with forceSameCodegenVersion: false to allow minor version difference
+  try {
+    await RustLib.init(forceSameCodegenVersion: false);
+  } catch (e, stack) {
+    debugPrint('Failed to initialize RustLib: $e\n$stack');
+  }
 
   // Initialize Local Storage
-  await StorageService().init();
+  try {
+    await StorageService().init();
+  } catch (e, stack) {
+    debugPrint('Failed to initialize StorageService: $e\n$stack');
+  }
 
   runApp(const TerMostApp());
 }

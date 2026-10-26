@@ -1,16 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../services/ssh_service.dart';
 
 class VirtualKeyboardBar extends StatefulWidget {
   final Function(List<int>) onSendBytes;
   final Function(String) onSendString;
   final VoidCallback onDismissKeyboard;
+  final VoidCallback? onOpenConsole;
+  final int sessionCount;
+  final SshSessionStatus? sessionStatus;
 
   const VirtualKeyboardBar({
     super.key,
     required this.onSendBytes,
     required this.onSendString,
     required this.onDismissKeyboard,
+    this.onOpenConsole,
+    this.sessionCount = 0,
+    this.sessionStatus,
   });
 
   @override
@@ -48,6 +55,19 @@ class _VirtualKeyboardBarState extends State<VirtualKeyboardBar> {
     widget.onSendBytes(bytes);
     if (_ctrlActive) setState(() => _ctrlActive = false);
     if (_altActive) setState(() => _altActive = false);
+  }
+
+  Color _statusColor(SshSessionStatus? status) {
+    switch (status) {
+      case SshSessionStatus.connected:
+        return const Color(0xFF22C55E); // Green
+      case SshSessionStatus.connecting:
+        return const Color(0xFFEAB308); // Yellow
+      case SshSessionStatus.disconnected:
+      case SshSessionStatus.error:
+      default:
+        return const Color(0xFFEF4444); // Red
+    }
   }
 
   @override
@@ -106,6 +126,75 @@ class _VirtualKeyboardBarState extends State<VirtualKeyboardBar> {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 4),
         children: [
+          // Console Entry Button
+          if (widget.onOpenConsole != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2.0, vertical: 4.0),
+              child: Material(
+                color: colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(8),
+                child: InkWell(
+                  onTap: widget.onOpenConsole,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 54, minHeight: 36),
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Status dot
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: _statusColor(widget.sessionStatus),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(
+                          Icons.tune_rounded,
+                          size: 16,
+                          color: colorScheme.onPrimaryContainer,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '控制台',
+                          style: TextStyle(
+                            color: colorScheme.onPrimaryContainer,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12.5,
+                          ),
+                        ),
+                        if (widget.sessionCount > 1) ...[
+                          const SizedBox(width: 5),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 5,
+                              vertical: 1.5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: colorScheme.primary,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              '${widget.sessionCount}',
+                              style: TextStyle(
+                                color: colorScheme.onPrimary,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
           // ESC
           buildKeyBtn(
             child: const Text('ESC'),

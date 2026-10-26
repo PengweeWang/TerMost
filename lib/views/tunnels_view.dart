@@ -125,13 +125,6 @@ class _TunnelsViewState extends State<TunnelsView> {
         return Scaffold(
           appBar: AppBar(
             title: const Text('端口转发'),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.add),
-                tooltip: '新建端口转发',
-                onPressed: _openAddTunnelDialog,
-              ),
-            ],
           ),
           body: rules.isEmpty
               ? Center(
@@ -333,11 +326,13 @@ class _TunnelsViewState extends State<TunnelsView> {
                     );
                   },
                 ),
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: _openAddTunnelDialog,
-            icon: const Icon(Icons.add),
-            label: const Text('新建转发'),
-          ),
+          floatingActionButton: rules.isEmpty
+              ? null
+              : FloatingActionButton.extended(
+                  onPressed: _openAddTunnelDialog,
+                  icon: const Icon(Icons.add),
+                  label: const Text('新建转发'),
+                ),
         );
       },
     );

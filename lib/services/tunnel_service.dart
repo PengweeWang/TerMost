@@ -4,6 +4,8 @@ import '../models/port_forward_rule.dart';
 import '../src/rust/api/simple.dart' as rust_api;
 import '../src/rust/forwarding.dart';
 import '../src/rust/session.dart';
+import 'keepalive_service.dart';
+import 'ssh_service.dart';
 import 'storage_service.dart';
 
 class TunnelService extends ChangeNotifier {
@@ -15,6 +17,16 @@ class TunnelService extends ChangeNotifier {
   Timer? _statsTimer;
 
   bool isTunnelRunning(String ruleId) => _subscriptions.containsKey(ruleId);
+  int get activeCount => _subscriptions.length;
+
+  void _syncKeepAlive() {
+    final activeSessions = SshService().activeCount;
+    final activeTunnels = _subscriptions.length;
+    KeepAliveService().syncState(
+      activeSessionsCount: activeSessions,
+      activeTunnelsCount: activeTunnels,
+    );
+  }
 
   Future<void> startTunnel(PortForwardRule rule) async {
     final host = StorageService().getHostById(rule.hostId);
@@ -68,18 +80,21 @@ class TunnelService extends ChangeNotifier {
             case 'started':
               rule.isRunning = true;
               notifyListeners();
+              _syncKeepAlive();
               break;
             case 'stopped':
               rule.isRunning = false;
               _subscriptions[rule.id]?.cancel();
               _subscriptions.remove(rule.id);
               notifyListeners();
+              _syncKeepAlive();
               break;
             case 'error':
               rule.isRunning = false;
               _subscriptions[rule.id]?.cancel();
               _subscriptions.remove(rule.id);
               notifyListeners();
+              _syncKeepAlive();
               break;
           }
         },
@@ -88,18 +103,22 @@ class TunnelService extends ChangeNotifier {
           _subscriptions[rule.id]?.cancel();
           _subscriptions.remove(rule.id);
           notifyListeners();
+          _syncKeepAlive();
         },
         onDone: () {
           rule.isRunning = false;
           _subscriptions.remove(rule.id);
           notifyListeners();
+          _syncKeepAlive();
         },
       );
 
       _ensureStatsTimer();
+      _syncKeepAlive();
     } catch (e) {
       rule.isRunning = false;
       notifyListeners();
+      _syncKeepAlive();
       rethrow;
     }
   }
@@ -115,6 +134,7 @@ class TunnelService extends ChangeNotifier {
     rule.isEnabled = false;
     StorageService().saveRule(rule);
     notifyListeners();
+    _syncKeepAlive();
 
     if (_subscriptions.isEmpty) {
       _statsTimer?.cancel();

@@ -112,48 +112,29 @@ class _TunnelFormDialogState extends State<TunnelFormDialog> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Forward Type Segmented Button
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(
-                      value: 'local',
-                      label: Text('本地转发 -L'),
-                    ),
-                    ButtonSegment(
-                      value: 'dynamic',
-                      label: Text('SOCKS5 -D'),
-                    ),
-                    ButtonSegment(
-                      value: 'remote',
-                      label: Text('远程 -R'),
-                    ),
-                  ],
-                  selected: {_forwardType},
-                  onSelectionChanged: (set) {
-                    setState(() => _forwardType = set.first);
-                  },
+                // Forward Type Vertical Selection Cards
+                _buildTypeOption(
+                  type: 'local',
+                  title: '本地端口转发',
+                  tag: '-L',
+                  desc: '将远程内网服务（如数据库/Web）映射到本机端口访问',
+                  colorScheme: colorScheme,
+                ),
+                _buildTypeOption(
+                  type: 'dynamic',
+                  title: 'SOCKS5 动态代理',
+                  tag: '-D',
+                  desc: '在手机本地开启 SOCKS5 代理，流量通过 SSH 中继',
+                  colorScheme: colorScheme,
+                ),
+                _buildTypeOption(
+                  type: 'remote',
+                  title: '远程反向转发',
+                  tag: '-R',
+                  desc: '将手机或局域网服务穿透反向暴露到远程服务器端口',
+                  colorScheme: colorScheme,
                 ),
                 const SizedBox(height: 12),
-                // Explanatory Banner
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: colorScheme.secondaryContainer.withOpacity(0.4),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    _forwardType == 'local'
-                        ? '本地转发 (-L): 在 Android 本地监听端口，将访问流量通过 SSH 加密通道转发至远程目标服务（如访问远程内网数据库、Web 管理面板）。'
-                        : _forwardType == 'dynamic'
-                            ? '动态转发 (-D): 在本地开启 SOCKS5 代理服务，本机所有支持 SOCKS5 代理的流量将通过 SSH 服务器中继出网。'
-                            : '远程转发 (-R): 让远程 SSH 服务器监听端口，将外网对服务器的请求反向隧道穿透转发至本地端口。',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: colorScheme.onSecondaryContainer,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
                 // Rule Name
                 TextFormField(
                   controller: _nameController,
@@ -181,6 +162,7 @@ class _TunnelFormDialogState extends State<TunnelFormDialog> {
                 ] else ...[
                   DropdownButtonFormField<String>(
                     value: _selectedHostId,
+                    isExpanded: true,
                     decoration: const InputDecoration(
                       labelText: '关联 SSH 服务器 *',
                       prefixIcon: Icon(Icons.dns_outlined),
@@ -189,7 +171,10 @@ class _TunnelFormDialogState extends State<TunnelFormDialog> {
                     items: hosts.map((h) {
                       return DropdownMenuItem(
                         value: h.id,
-                        child: Text('${h.name} (${h.username}@${h.host}:${h.port})'),
+                        child: Text(
+                          '${h.name} (${h.username}@${h.host}:${h.port})',
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       );
                     }).toList(),
                     onChanged: (val) {
@@ -310,6 +295,104 @@ class _TunnelFormDialogState extends State<TunnelFormDialog> {
           child: const Text('保存规则'),
         ),
       ],
+    );
+  }
+
+  Widget _buildTypeOption({
+    required String type,
+    required String title,
+    required String tag,
+    required String desc,
+    required ColorScheme colorScheme,
+  }) {
+    final isSelected = _forwardType == type;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: InkWell(
+        onTap: () => setState(() => _forwardType = type),
+        borderRadius: BorderRadius.circular(12),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? colorScheme.primaryContainer.withOpacity(0.4)
+                : colorScheme.surfaceContainerHighest.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color:
+                  isSelected ? colorScheme.primary : colorScheme.outlineVariant,
+              width: isSelected ? 1.5 : 1.0,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                isSelected
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_off,
+                color: isSelected ? colorScheme.primary : colorScheme.outline,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          title,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.w600,
+                            color: isSelected
+                                ? colorScheme.onPrimaryContainer
+                                : colorScheme.onSurface,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? colorScheme.primary
+                                : colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            tag,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: isSelected
+                                  ? colorScheme.onPrimary
+                                  : colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      desc,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isSelected
+                            ? colorScheme.onPrimaryContainer.withOpacity(0.8)
+                            : colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -1,13 +1,16 @@
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::sync::OnceLock;
 use tokio::sync::{mpsc, RwLock};
 use russh::client::{self, Config, Handler};
 use russh::keys::PublicKeyOrCertificate;
 use russh::keys::PrivateKey;
-use russh::ChannelMsg;
+use russh::{ChannelMsg, Pty};
 
 use crate::frb_generated::StreamSink;
+
+static NEXT_INSTANCE: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone, Debug)]
 pub struct SshConnectConfig {
@@ -45,6 +48,7 @@ impl Handler for ClientHandler {
 }
 
 pub struct SessionHandle {
+    pub instance_id: u64,
     pub stdin_tx: mpsc::UnboundedSender<Vec<u8>>,
     pub resize_tx: mpsc::UnboundedSender<(u32, u32)>,
     pub close_tx: mpsc::Sender<()>,
@@ -61,14 +65,18 @@ pub async fn start_ssh_session(
     sink: StreamSink<SessionEvent>,
 ) -> Result<(), String> {
     let ssh_config = Arc::new(Config {
-        inactivity_timeout: Some(std::time::Duration::from_secs(60)),
+        inactivity_timeout: None,
+        keepalive_interval: Some(std::time::Duration::from_secs(15)),
+        keepalive_max: 3,
         ..Config::default()
     });
 
     let addr = (config.host.as_str(), config.port);
-    let mut session = client::connect(ssh_config, addr, ClientHandler {})
+    let connect_future = client::connect(ssh_config, addr, ClientHandler {});
+    let mut session = tokio::time::timeout(std::time::Duration::from_secs(15), connect_future)
         .await
-        .map_err(|e| format!("Connection to {}:{} failed: {}", config.host, config.port, e))?;
+        .map_err(|_| format!("连接到 {}:{} 超时 (15秒)，请检查服务器网络或端口", config.host, config.port))?
+        .map_err(|e| format!("连接到 {}:{} 失败: {}", config.host, config.port, e))?;
 
     // Authenticate
     let auth_ok = match config.auth_type.to_lowercase().as_str() {
@@ -113,6 +121,16 @@ pub async fn start_ssh_session(
         .await
         .map_err(|e| format!("Failed to open session channel: {}", e))?;
 
+    let pty_modes = [
+        (Pty::ECHO, 1),
+        (Pty::ISIG, 1),
+        (Pty::ICANON, 1),
+        (Pty::IUTF8, 1),
+        (Pty::ICRNL, 1),
+        (Pty::OPOST, 1),
+        (Pty::ONLCR, 1),
+    ];
+
     channel
         .request_pty(
             false,
@@ -121,7 +139,7 @@ pub async fn start_ssh_session(
             config.rows.max(5),
             0,
             0,
-            &[],
+            &pty_modes,
         )
         .await
         .map_err(|e| format!("Failed to request PTY: {}", e))?;
@@ -135,12 +153,15 @@ pub async fn start_ssh_session(
     let (resize_tx, mut resize_rx) = mpsc::unbounded_channel::<(u32, u32)>();
     let (close_tx, mut close_rx) = mpsc::channel::<()>(1);
 
+    let instance_id = NEXT_INSTANCE.fetch_add(1, Ordering::Relaxed);
+
     // Save session handle
     {
         let mut sessions = active_sessions().write().await;
         sessions.insert(
             session_id.clone(),
             SessionHandle {
+                instance_id,
                 stdin_tx,
                 resize_tx,
                 close_tx,
@@ -215,14 +236,21 @@ pub async fn start_ssh_session(
                 _ = close_rx.recv() => {
                     let _ = channel.eof().await;
                     let _ = channel.close().await;
+                    let _ = session.disconnect(russh::Disconnect::ByApplication, "", "").await;
                     break;
                 }
             }
         }
 
-        // Cleanup
-        let mut sessions = active_sessions().write().await;
-        sessions.remove(&s_id);
+        // Cleanup: Only remove if the current handle in active_sessions matches this instance_id
+        {
+            let mut sessions = active_sessions().write().await;
+            if let Some(handle) = sessions.get(&s_id) {
+                if handle.instance_id == instance_id {
+                    sessions.remove(&s_id);
+                }
+            }
+        }
     });
 
     Ok(())

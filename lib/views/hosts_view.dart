@@ -107,13 +107,6 @@ class _HostsViewState extends State<HostsView> {
                 ),
               ],
             ),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.add),
-                tooltip: '添加主机',
-                onPressed: _openAddHostDialog,
-              ),
-            ],
           ),
           body: Column(
             children: [
@@ -349,11 +342,13 @@ class _HostsViewState extends State<HostsView> {
               ),
             ],
           ),
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: _openAddHostDialog,
-            icon: const Icon(Icons.add),
-            label: const Text('添加主机'),
-          ),
+          floatingActionButton: hosts.isEmpty
+              ? null
+              : FloatingActionButton.extended(
+                  onPressed: _openAddHostDialog,
+                  icon: const Icon(Icons.add),
+                  label: const Text('添加主机'),
+                ),
         );
       },
     );

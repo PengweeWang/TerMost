@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.termost.termost"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
